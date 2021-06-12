@@ -1,0 +1,201 @@
+---
+title: "多元-05-2020270026"
+author: "2020270026 王姿文"
+date: "3/31/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(showtext)
+library(forcats)
+library(kableExtra)
+options(scipen = 999)
+showtext.auto(enable = TRUE)
+#font.add('SimSun')
+```
+
+# 1. 
+
+$\sum_{i=1}^n(x_i-\bar{x})^2 \\ =\sum_{i=1}^n(x_i-\frac{1}{n}\sum_{j=1}^{n}x_j)^2 \\ = \sum_{i=1}^n(x_i^2-\frac{2}{n}x_i\sum_{j=1}^nx_j+(\sum_{j=1}^nx_j)^2\frac{1}{n^2}) \\ =\sum_{i=1}^nx_i^2-\frac{2}{n}\sum_{j=1}^nx_j\sum_{i=1}^nx_i+\frac{1}{n}(\sum_{j=1}^nx_j)^2 \\ = \sum_{i=1}^nx_i^2-\frac{1}{n}(\sum_{j=1}^nx_j)^2 \\ = \frac{1}{2n}(n\sum_{i=1}^nx_i^2+n\sum_{j=1}^nx_j^2-2(\sum_{j=1}^nx_j)^2) \\ = \frac{1}{2n}(\sum_{i=1}^n(nx_i^2+\sum_{j=1}^nx_j^2-2\sum_{j=1}^nx_jx_i) \\ =\frac{1}{2n}(\sum_{i=1}^n\sum_{j=1}^n(x_i^2+x_j^2-2x_ix_j)) \\ =\frac{1}{2n}\sum_{i=1}^n\sum_{j=1}^n(x_i-x_j)^2$
+    
+----------
+
+# 2.
+
+## 2.1 数据
+数据为城镇居民消费指标数据，分别为31个省在2019和2011的数据，以下将比较两个数据结果。   
+
+下表仅列出2019的数据：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+load('provConsume.RData') 
+load('Consume2019.RData')
+d1 <- provConsume
+d2 <- dataConsume 
+rn <- d2$X
+cn <- c('食品','衣著','居住','家庭設備及用品','交通和通信','文教娛樂','醫療保健','其他')
+rownames(d1) <- rn
+rownames(d2) <- rn
+d1 <- d1[,1:8]
+d2 <- d2[,2:9]
+colnames(d1) <- cn
+colnames(d2) <- cn
+kbl(d2) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+2011的数据结构：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+str(d1)
+```
+
+2019的数据结构：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+str(d2)
+```
+
+--------
+
+## 2.2 用快速聚类法分成4类
+
+均设定指定类个数为四个、指定重复二十次随机初值比较，可以看出2011与2019在分成四个类的条件下，其四个类的省份不同，且四个类的省份个数也不同。   
+
+2011:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+k <- 4
+res11 <- kmeans(d1, centers=k, nstart=20) 
+res11
+```
+
+2019:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+res12 <- kmeans(d2, centers=k, nstart=20) 
+res12
+```
+
+下面按类中心的8个指标平均值降序排序为类 号次序，2019和2011的次序明显不同:
+
+2011:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+xmean1 <- rowMeans(d1)
+cl.new1 <- res11$cluster
+cl.new1[] <- as.integer(fct_reorder(factor(cl.new1), xmean1, mean, .desc=TRUE))
+kbl(as.data.frame(sort(cl.new1))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+2019:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+xmean2 <- rowMeans(d2)
+cl.new2 <- res12$cluster
+cl.new2[] <- as.integer(fct_reorder(factor(cl.new2), xmean2, mean, .desc=TRUE))
+kbl(as.data.frame(sort(cl.new2))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+--------
+
+## 2.3 用散点图矩阵表现分类效果
+
+下可看出2019和2011的散点图不同，然而由于变量多，所以这样来看散点图的比较还是有些麻烦。   
+
+2011:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+cmap <- c("skyblue", "mediumpurple2", "wheat","pink")
+pairs(d1,col=cmap[res11$clust])
+```
+
+2019:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+pairs(d2,col=cmap[res12$clust])
+```
+
+--------
+
+## 2.4 用星图验证分类
+
+用星图来比较就比散点图还要来得轻易许多，不仅能明确看出个省份所属分类，也能看出其各个变量的占比，可以看出在2011和2019间，不仅分类有变化，变量的占比也有所不同。
+
+2011:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ind1 <- order(cl.new1) 
+d11 <- d1[ind1,]
+names(d11) <- cn
+stars(d11, len=0.9, cex=0.8, key.loc=c(12,1.6),draw.segments=TRUE,
+      labels = paste(row.names(d11), '(', cl.new1[ind1], ')', sep=''))
+```
+
+2019:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ind2 <- order(cl.new2) 
+d12 <- d2[ind2,]
+names(d12) <- cn
+stars(d12, len=0.9, cex=0.8, key.loc=c(12,1.6), draw.segments=TRUE,
+      labels = paste(row.names(d12), '(', cl.new2[ind1], ')', sep=''))
+```
+
+-------
+
+## 2.5 用脸谱图验证分类
+
+接着看脸谱图来验证分类，可以看出2019的分类效果较佳，因为2019的脸谱图在各类比较显然统一。
+
+2011: 
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+palette(rainbow(12)) 
+aplpack::faces(
+  d11, label=paste(row.names(d11), '(', cl.new1[ind1], ')', sep='') )
+```
+
+2019:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+aplpack::faces(
+  d12, label=paste(row.names(d12), '(', cl.new2[ind2], ')', sep='') )
+```
+
+
+--------
+
+## 2.6 分类个数的考察    
+
+可以明显看出在分类个数一样的条件下，2019的累积解释变异比2011来得高，因此2019的聚类效果较佳。
+
+2011:
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+max.k <- 8
+rat <- numeric(max.k) 
+for(kk in seq(max.k)){
+  res2 <- kmeans(d1, centers=kk, nstart=20)
+  rat[kk] <- (1 - res2$tot.withinss / res2$totss)*100 }
+plot(rat, xlab='k', ylab='%var explained', type='b',col = 'skyblue',lwd = 10)
+```
+
+2019: 
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+max.k <- 8
+rat <- numeric(max.k) 
+for(kk in seq(max.k)){
+  res2 <- kmeans(d2, centers=kk, nstart=20)
+  rat[kk] <- (1 - res2$tot.withinss / res2$totss)*100 }
+plot(rat, xlab='k', ylab='%var explained', type='b',col = 'skyblue',lwd = 10)
+```
+
+--------
+
+## 2.7 小結
+
+整体看来，2019的聚类效果比2011还佳，而经过这8年，聚类的内容也有所改变，2019聚类也和我们所想的较为类似，例如第一类就是两大都市北京和上海。
