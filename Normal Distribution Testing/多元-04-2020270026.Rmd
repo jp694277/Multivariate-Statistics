@@ -1,0 +1,101 @@
+---
+title: "多元-04-2020270026"
+author: "2020270026 王姿文"
+date: "3/22/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(showtext)
+library(mvnormtest)
+library(mvShapiroTest)
+library(readr)
+library(dplyr)
+library(ggplot2) 
+library(GGally)   
+library(kableExtra)
+options(scipen = 999)
+```
+
+# 1. 
+
+已知$(X,Y)$是二随机变量，$(x_i,y_i),i=1,...,n$是其样本，$S=\frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y})$，下证$E(S)=Cov(X,Y)$:
+$S=\frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y}) \\ \Rightarrow (n-1)S = \sum_{i=1}^{n}(x_i-\bar{x})(y_i-\bar{y}) \\ = \sum_{i=1}^{n}x_iy_i-\sum_{i=1}^{n}x_i\bar{y}-\sum_{i=1}^{n}y_i\bar{x}+n\bar{x}\bar{y} \\ = \sum_{i=1}^{n}x_iy_i-\frac{\sum_{i=1}^{n}x_i\sum_{i=1}^{n}y_i}{n}-\frac{\sum_{i=1}^{n}y_i\sum_{i=1}^{n}x_i}{n}+\frac{\sum_{i=1}^{n}x_i\sum_{i=1}^{n}y_i}{n} \\ =\sum_{i=1}^{n}x_iy_i-\frac{\sum_{i=1}^{n}x_i\sum_{i=1}^{n}y_i}{n}$   
+   
+$(n-1)E(S) = E(\sum_{i=1}^{n}X_iY_i)--\frac{1}{n}E(\sum_{i=1}^{n}X_i\sum_{i=1}^{n}Y_i) \\ =nE(XY)-\frac{1}{n}[nE(XY)+n(n-1)E(X)E(Y)] \\ =(n-1)[E(XY)-E(X)E(Y)] \\ = (n-1)Cov(X,Y) \\ \Rightarrow E(S) = Cov(X,Y)$    
+    
+----------
+
+# 2.
+
+数据来自Kaggle:[World Happiness Report](https://www.kaggle.com/unsdsn/world-happiness)，描述不同国家的幸福指数，此处任意挑选2016的数据来绘制简单的探索性资料分析。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+happy <- read_csv("archive/2016.csv")
+happy <- happy %>%
+  rename('Happiness_Rank' = 'Happiness Rank',
+         'Happiness_Score'='Happiness Score',
+         'Lower_Confidence_Interval'='Lower Confidence Interval',
+         'Upper_Confidence_Interval'='Upper Confidence Interval',
+         'Economy_GDP'='Economy (GDP per Capita)',
+         'Health'='Health (Life Expectancy)',
+         'Trust_Government_Corruption' = 'Trust (Government Corruption)',
+         'Dystopia_Residual'='Dystopia Residual')
+dt <- head(happy)
+kbl(dt) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+取其中`Economy_GDP`~`Dystopia_Residual`的连续型变量，一共七个变量，下图为七个变量间的**scatter plot**和**density plot**。   
+可以看出分布虽有些偏态，但都是正态的形状。
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+happy_con <- select_if(happy, is.numeric)
+
+d <- as.matrix(happy_con[,5:11]) 
+n <- nrow(d)
+p <- ncol(d)
+
+wrap_1<-wrap(ggally_points,size=2,color="mediumpurple2",alpha=0.3)
+wrap_2<-wrap(ggally_densityDiag,size=2,color="skyblue")
+wrap_3 <- wrap(ggally_cor, size = 40, color = "darkgrey", fontface = "bold")
+ggpairs(happy_con[,5:11],
+        lower = list(continuous = wrap_1),
+        diag = list(continuous = wrap_2),
+        higher = list(continuous = wrap_3))
+
+```
+
+接着以曼哈顿距离和卡方来绘制**广义QQ plot**，确实是有偏态但基本符合正态。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+mah <- mahalanobis(d, colMeans(d), var(d)) ## p=6, 应该近似独立chi^2(6)分布
+y <- sort(mah)
+x <- qchisq((1:n)/(n+1), p)
+dt <- data.frame(x,y)
+ggplot(dt, aes(x, y)) + 
+  geom_point(color = 'orange',size=5) + 
+  labs(title ='Mahalanobis distance vs. chi-square quantiles',
+       x='Chi-square quantile',y='Obs') + 
+  geom_smooth(method='lm', formula= y~x,se = FALSE,size=3) + 
+  theme(plot.title = element_text(size=25, face="bold"), 
+        axis.title = element_text(size=20, face="bold"),
+        axis.text = element_text(size=18))
+```
+
+做正态转换后的结果符合正态。
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+z <- qnorm(pchisq(mah, 7)) 
+shapiro.test(z)
+```
+
+以下无论用哪个检验也都分显著符合正态分布，检验结果搭配一开始绘制的图，确实符合正态分布。
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+d <- t(as.matrix(happy_con[,5:11]))
+mvnormtest::mshapiro.test(d)
+```
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+mvShapiroTest::mvShapiro.Test(as.matrix(happy_con[,5:11]))
+```
