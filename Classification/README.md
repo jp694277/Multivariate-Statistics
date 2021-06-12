@@ -1,0 +1,4 @@
+- LDA - Fisher
+- LDA - Bayes 
+- Quadratic Discriminant 
+- QDA
