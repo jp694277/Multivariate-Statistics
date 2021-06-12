@@ -1,0 +1,136 @@
+---
+title: "多元-10-2020270026"
+author: "2020270026 王姿文"
+date: "5/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(kableExtra)
+library(showtext)
+library(corrplot)
+library(CCA) 
+library(CCP)
+library(ggplot2)
+showtext.auto(enable = TRUE)
+#font.add('SimSun')
+```
+
+# 1. 数据   
+
+- 数据叙述：全国31个省、直辖市、自治区的城镇居民平均每人全年家庭收入来源及现金消费支出情况，其中**收入来源**-`工资性收入`(x1)、`经营净收入`(x2)、`财产性收入`(x3)、`转移性收入`(x4)；**现金消费性支出指标**-`食品`(y1)、`衣着`(y2)、`居住`(y3)、`交通和通信`(y4) 
+
+- 目标： 研究**收入来源**与**现金消费性支出指标**的关系。仅分析相关性，而非因果关系，进行典型相关分析
+   
+   
+下表为数据，以及数据的结构：  
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+df <- read_excel("ex9.5.xls")
+a <- df$地区
+df <- df[,-1]
+rownames(df) <- a
+colnames(df) <- c('工资性收入','经营净收入','财产性收入','转移性收入',
+                  '食品','衣着','居住','交通和通信')
+kbl(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+
+str(df)
+```
+
+-------
+
+# 2. 典型相关分析
+
+首先来看8个变量的相关系数阵，可以看到相关系数>0.7的只有下面五项，并没很多项：   
+    
+      
+- 食品 vs 工资性收入
+- 交通和通信 vs 工资性收入
+- 财产性收入 vs 经营净收入
+- 交通和通信 vs 食品
+- 交通和通信 vs 居住
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+# corr
+cor(df) 
+# 食品 vs 工资性收入; 交通和通信 vs 工资性收入;
+# 财产性收入 vs 经营净收入; 交通和通信 vs 食品;
+# 交通和通信 vs 居住
+corrplot(cor(df),tl.cex=1.5,tl.srt=45)
+```
+
+接着来看研究**收入来源**与**现金消费性支出指标**的典型相关分析：
+
+首先能看出第一对典型相关系数很大，高达0.9717098    
+    
+    
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ds <- scale(df)
+cc1 <- cancor(ds[,1:4], ds[,5:8]) 
+cc1$cor# 第一对典型相关系数很大
+```
+
+仔细看第一对典型相关维度内各个变量的系数，可以看出**收入来源**是`工资性收入`的对比，而**现金消费性支出指标**是`交通和通信`的对比，并且`工资性收入`和`交通和通信`呈正相关   
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+cc1$xcoef
+cc1$ycoef
+```
+    
+   
+且也能看到各个省份的xscores, yscores...等
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+cc2 <- cc(ds[,1:4], ds[,5:8])
+cc2$scores$xscores
+cc2$scores$yscores
+```
+
+接著來看第一对典型变量的散点图, 其相關係數是0.9717098   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+dfc <- data.frame(cc2$scores$xscores[, 1], cc2$scores$yscores[, 1])
+colnames(dfc) <- c('x','y')
+ggplot(dfc, aes(x, y)) +
+  geom_point(color = 'orange',size=8) +
+  labs(title ='第一对典型变量的散点图, p=0.9717098',
+       x='自变量第一典型变量',y='因变量第一典型变量') +
+  theme(plot.title = element_text(size=30, face="bold"),
+        axis.title = element_text(size=30, face="bold"),
+        axis.text = element_text(size=25))
+```
+
+再来看所有原始变量与前两对典型变量得分的相关系数的散点图， 横坐标是第一典型变量权重， 纵坐标是第二 典型权重。 自变量为红色，因变量为蓝。由于变量的点较为集中，说明集中的点内的自变量、因变量与前两对典型变量的相关性很类似。举例来看：`工资性收入`和`交通和通信`第一对相关系数绝对值均很高，且第二对相关系数绝对值均很低      
+   
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+plt.cc(cc2, d1 = 1, d2 = 2, type = "v", var.label = TRUE)
+
+cor(ds[,1:4], cc2$scores$xscores[ , 1:2])
+cor(ds[,5:8], cc2$scores$yscores[ , 1:2])
+```
+
+也可将每个观测用第一和第二典型变量表示，可以看出重点直辖市均在Dimension 1<0的位置上   
+   
+   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+plt.cc(cc2, d1 = 1, d2 = 2, type = "i", var.label = TRUE)
+```
+
+最后可以用Pillai-Bartlett Trace方法来检验此典型相关系数，可以看出第一典型相关的p-value<0.05，非常显著，所以由第一典型相关得出的结论均有一定可靠性   
+   
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+p.asym(cc1$cor, N=nrow(ds),p=4, q=4, tstat='Pillai')
+```
+
+
+-------
+
+# 3. 結論
+
+整体看来研究**收入来源**与**现金消费性支出指标**具有相关性，其相关性主要发生在`工资性收入`和`交通和通信`层面。
