@@ -1,0 +1,190 @@
+---
+title: "多元-08-2020270026"
+author: "2020270026 王姿文"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra)
+library(dplyr)
+library(readxl)
+pca.pkg <- c("FactoMineR", "factoextra", "corrplot")
+lapply(pca.pkg, library, character.only=TRUE)
+library(devtools)
+library(ggbiplot)
+library(ggplot2)
+library(corrplot)
+library(showtext)
+showtext.auto(enable = TRUE)
+options(scipen = 999)
+#font.add('SimSun')
+```
+
+# 1. 数据
+- 数据叙述：数据为中国各省份的一些特征，一共是rows = 31, columns = 8，故共有8个维度。
+   
+- 目标： 进行主成分分析和因子分析   
+   
+   
+下表为其中几笔数据，以及数据的结构：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+df <- read_excel("ex6.7.xls")
+a <- df$...1
+df <- df[,-1]
+rownames(df) <- a
+kbl(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+-------
+
+# 2. PCA
+
+因为各列不可比，所以后续的pca分析需要用样本相关阵。   
+其中`食品`x`交通通讯`、`食品`x`教育`、`食品`x`家庭服务`、`居住`x`交通通讯`、`居住`x`教育`、`居住`x`家庭服务`、`居住`x`耐用消费品`、`交通通讯`x`教育`、`交通通讯`x`家庭服务`、`教育`x`家庭服务`、`家庭服务`x`耐用消费品`的绝对值相关性>0.7：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+kbl(round( cor(df), 3)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+corrplot(cor(df),tl.cex=4)
+```
+
+
+开始做主成份分析，可以看到在Comp=4时，可解释累积变异就>90%，因此选择四个维度变可解释93%的原始数据。此外，若使用两个主成分的话，其可解释累积变异为82%，已經算高了，后续可就前两维来画图看一些insight。   
+而我们也能从loadings来判断不同主成分的性质，例如：Comp.1主要是`食品`、`居住`、`交通通讯`、`教育`、`家庭服务`、`耐用消费品`的值较大；Comp.2主要是`衣着`、`医疗`的值较大。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+pca1 <- princomp(df, cor=TRUE) 
+summary(pca1, loadings=TRUE)
+```
+
+可以从**Scree plot&**简单看出每一个主成分的可解释变异占比：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+df.pca <- PCA(df, graph = FALSE,scale.unit = TRUE)
+fviz_eig(df.pca, addlabels = TRUE, ylim = c(0, 50)) + 
+  theme(text = element_text(size = 40))
+```
+
+下图为前两个主成分的loadings所画出来的原始变量表现，可以看出在第一个主成分是是`食品`、`居住`、`交通通讯`、`教育`、`家庭服务`、`耐用消费品`的值较大，并且可以看出正负；在第二个主成分是`衣着`、`医疗`的值较大：  
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggbiplot(pca1, obs.scale = 1, var.scale = 1,labels = NULL,varname.size = 13) + 
+  theme(text = element_text(size = 40))
+```
+
+综合来看原始八个变量在第一主成分和第二主成分的贡献占比为下图，排名前几的变量与其他变量间的corr都较高：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+fviz_contrib(df.pca, choice = "var", axes = 1:2, top = 10) + 
+  theme(text = element_text(size = 40))
+```
+
+接着来看原始八个变量在第一在第一主成分和第二主成分的贡献占比和k mean分类，特别的是由两个主成分，可以用pca完成降维跟聚类的结果，此处我设定共有三个类别，结果为第一类：`医疗`、`家庭服务`、`交通通讯`、`食品`；第二类：`衣着`；第三类：`居住`、`教育`、`耐用消费品`：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+fviz_pca_var(df.pca, col.var = "contrib",labelsize = 13,
+             gradient.cols = c("blue", "yellow", "red"))+ 
+    theme(text = element_text(size = 40),
+          legend.key.height = unit(2.5, "cm"))
+
+set.seed(123)
+var <- get_pca_var(df.pca)
+var.kms <- kmeans(var$contrib, centers = 3, nstart = 25)
+kms.grp <- as.factor(var.kms$cluster)
+fviz_pca_var(df.pca, col.var = kms.grp, palette = c("blue", "green", "red"),legend.title = "Cluster",labelsize = 13)+ 
+    theme(text = element_text(size = 40),
+          legend.key.height = unit(2.5, "cm"))
+```
+
+最后将国家与前两个主成分的loadings所画出来的原始变量画在一起，可以看出不同省份在两个主成分和原始变量间的分布，例如可以看出比较主要的重点省份会是在x轴的右方：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggbiplot(pca1, obs.scale = 1, var.scale = 1,labels = row.names(df)[1:31],varname.size = 13, labels.size = 8) + 
+  theme(text = element_text(size = 40))
+```
+
+
+-----
+
+# 3. 因子分析
+
+以下分三种因子分析，分别为旋转及不旋转的方法，由于摆在一起看比较看得出差异，因此以下会将三种方法放在一起比较。
+
+## 3.1 Loadings and Cumulative Variation
+
+下面三种方法，不旋转和varimax旋转大致是是f1：`食品`、`居住`、`交通通讯`、`教育`、`家庭服务`、`耐用消费品`，f2：`衣着`、`医疗`、`耐用消费品`；而promax旋转比较不同，f1:`食品`、`居住`、`交通通讯`、`教育`、`家庭服务`，f2:`衣着`、`医疗`、`耐用消费品`
+
+### a 不旋转 
+用相关阵不旋转做因子分析。用极大似然估计，没有旋转
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+fac1 <- factanal(df, factors=2, rotation='none') 
+fac1 
+```
+
+### b varimax旋转
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+## fa varimax
+fac2 <- factanal(df, factors=2, rotation='varimax') 
+fac2
+```
+
+### c promax旋转
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+# fa promax
+fac3 <- factanal(df, factors=2, rotation='promax',scores='regression')
+fac3
+```
+
+par(mfrow=c(1,3))
+
+
+-----
+
+## 3.2 Loadings Plot
+
+下图为factor analysis跟PCA analysis，可以看出factor analysis比较明显能将不同类型的特征区分开来
+
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+par(mfrow=c(1,3))
+load1 <- loadings(fac1)
+plot(load1, type='n', main='不旋转的因子分析载荷',cex.lab=2, cex.axis=1.5, cex.main=2) 
+text(load1, rownames(load1), cex = 2)
+load2 <- loadings(fac2)
+plot(load2, type='n', main='varimax旋转的因子分析载荷',
+cex.lab=2, cex.axis=1.5, cex.main=2)
+text(load2, rownames(load2), cex = 2)
+load3 <- loadings(fac3)
+plot(load3, type='n', main='promax旋转的因子分析载荷',
+cex.lab=2, cex.axis=1.5, cex.main=2) 
+text(load3, rownames(load3), cex = 2)
+```
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+plot(loadings(pca1)[,1], loadings(pca1)[,2], xlab="1st PCA",
+     ylab="2nd PCA", main="PCA Loadings Plot", type="n",
+cex.lab=2, cex.axis=1.5, cex.main=2)
+text(loadings(pca1)[,1], loadings(pca1)[,2], labels=colnames(df)[1:8]
+     , cex = 2)
+```
+
+-----
+
+## 3.3 biplot
+
+相对PCA的biplot，FA的biplot比较明显能看出聚类的效果
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+biplot(fac3$scores, fac3$loadings,cex = 3)
+```
+
+----
+
+
+# 4. 小結
+
+此次的分析结果，结合累计解释变异，PCA和FA各有好坏，像是一样两个维度，PCA的累积解释变异较高，然而以特征的分类和省份聚类来看，FA又表现较佳，因此必须依照目的和该数据的特性来选择降维方法。

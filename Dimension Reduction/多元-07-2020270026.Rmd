@@ -1,0 +1,105 @@
+---
+title: "多元-07-2020270026"
+author: "2020270026 王姿文"
+date: "4/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra)
+library(dplyr)
+pca.pkg <- c("FactoMineR", "factoextra", "corrplot")
+lapply(pca.pkg, library, character.only=TRUE)
+library(devtools)
+library(ggbiplot)
+library(ggplot2)
+library(corrplot)
+options(scipen = 999)
+#font.add('SimSun')
+```
+
+# 1. 数据
+- 数据叙述：数据为国家的一些特征，一共是rows = 50, columns = 8，故共有8个维度。
+   
+- 目标： 进行主成分分析   
+   
+   
+下表为其中几笔数据，以及数据的结构：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+data(state)
+kbl(head(state.x77)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+-------
+
+# 2. PCA
+
+因为各列不可比，所以后续的pca分析需要用样本相关阵。   
+其中只有`Murder` vs `Illiteracy`、`Murder` vs `Life Exp`的绝对值相关性>0.7：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+kbl(round( cor(state.x77), 3)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+corrplot(cor(state.x77),tl.cex=4)
+```
+
+开始做主成份分析，可以看到在Comp=5时，可解释累积变异就>90%，因此选择五个维度变可解释93%的原始数据。此外，若使用两个主成分的话，其可解释累积变异为65%，后续可就前两维来画图看一些insight。   
+而我们也能从loadings来判断不同主成分的性质，例如：Comp.1主要是`Illiteracy`、`Life Exp`、`Murder`、`HS Grad`的值较大，故第一主成分是生活和犯罪成分（而且基本上就是上述说说到相关系数较大的变量）；Comp.2主要是`Population`、`Income`、`Area`的值较大，故第二主成分是地理资讯和收入成分...等以此类推。
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+pca1 <- princomp(state.x77, cor=TRUE) 
+summary(pca1, loadings=TRUE)
+```
+
+可以从**Scree plot&**简单看出每一个主成分的可解释变异占比：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+state.x77.pca <- PCA(state.x77, graph = FALSE,scale.unit = TRUE)
+fviz_eig(state.x77.pca, addlabels = TRUE, ylim = c(0, 50)) + 
+  theme(text = element_text(size = 40))
+```
+
+下图为前两个主成分的loadings所画出来的原始变量表现，可以看出在第一个主成分是`Illiteracy`、`Life Exp`、`Murder`、`HS Grad`的值较大，并且可以看出正负；在第二个主成分是`Population`、`Income`、`Area`的值较大，且几乎每个原始变量都是正值：  
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggbiplot(pca1, obs.scale = 1, var.scale = 1,labels = NULL,varname.size = 13) + 
+  theme(text = element_text(size = 40))
+```
+
+综合来看原始八个变量在第一主成分和第二主成分的貢獻占比为下图，前五个占比为`Illiteracy`、`Life Exp`、`Murder`、`HS Grad`、`Income`，这五者的corr只少都有和其中一者高达0.6以上：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+fviz_contrib(state.x77.pca, choice = "var", axes = 1:2, top = 10) + 
+  theme(text = element_text(size = 40))
+```
+
+接着来看原始八个变量在第一在第一主成分和第二主成分的贡献占比和k mean分类，特别的是由两个主成分，可以用pca完成降维跟聚类的结果，此处我设定共有三个类别，结果为第一类：`Income`；第二类：`Population`、`Area`；第三类：`Illiteracy``、Life Exp`、`Murder`、`HS Grad`、`Frost`：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+fviz_pca_var(state.x77.pca, col.var = "contrib",labelsize = 13,
+             gradient.cols = c("blue", "yellow", "red"))+ 
+    theme(text = element_text(size = 40),
+          legend.key.height = unit(2.5, "cm"))
+
+set.seed(123)
+var <- get_pca_var(state.x77.pca)
+var.kms <- kmeans(var$contrib, centers = 3, nstart = 25)
+kms.grp <- as.factor(var.kms$cluster)
+fviz_pca_var(state.x77.pca, col.var = kms.grp, palette = c("blue", "green", "red"),legend.title = "Cluster",labelsize = 13)+ 
+    theme(text = element_text(size = 40),
+          legend.key.height = unit(2.5, "cm"))
+```
+
+最后将国家与前两个主成分的loadings所画出来的原始变量画在一起，可以看出不同国家在两个主成分和原始变量间的分布：   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggbiplot(pca1, obs.scale = 1, var.scale = 1,labels = row.names(state.x77)[1:50],varname.size = 13, labels.size = 8) + 
+  theme(text = element_text(size = 40))
+```
+
+-----
+
+# 3. 小結
+
+通常降维的原因是因为，数据在维度高时会相对稀疏，导致特征没这么明显，因此希望可以降维（但希望解释变异不至于损失太多）。降维后可以以主成分取代原始变量成为新的特征，并以此来做后续的聚类、分类，或预测，此次作业仅做了主成分分析并展现各个主成分的insight，若后续继续建模，则可以依照此次内容结合模型。
