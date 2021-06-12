@@ -1,0 +1,115 @@
+---
+title: "多元-09-2020270026"
+author: "2020270026 王姿文"
+date: "5/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra)
+library(readxl)
+library(MASS)
+library(showtext)
+library(aplpack)
+showtext.auto(enable = TRUE)
+options(scipen = 999)
+#font.add('SimSun')
+```
+
+# 1. 数据   
+
+- 数据叙述：2011年昆明市14个区县三大产业的产值情况
+
+- 目标： 进行对应分析
+   
+   
+下表为数据，以及数据的结构：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+df <- read_excel("ex8.5.xls")
+a <- df$区县名
+df <- df[,-1]
+rownames(df) <- a
+kbl(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+
+str(df)
+```
+
+-------
+
+# 2. 对应分析
+
+首先做卡方独立性检定，发现p-value<0.05，故区县与产业间不独立   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+chisq.test(df)
+```
+
+
+开始做对应分析，首先来看降维后的区县和产业间的典型相关分析，可以看出第一个维度的典型相关系数比第二个维度高
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+co <- corresp(df, nf=2)
+co$cor
+```
+
+- 在第一维度上，产业的次序完全正确，反映了三个行类在对应分析图中的接近关系是完全正确的
+- 第二产业和第三产业在第一维度上较为接近，然而第一产业和第三产业在第二维度上较为接近
+- 区县和产业之间的关系: 
+  - 第一产业：宜良、石林、寻甸、禄劝，要注意的是第一产业与这四个区县远离原点且靠得近，因此关联较强
+  - 第二产业：安宁、五华，区县与产业的关联强度没有第一产业来得高
+  - 第三产业：关渡、西山、盘龙，区县与产业的关联强度没有第一产业来得高
+  - 其他：
+    - 崇明、富民、晋宁：这三个区县的产业结构十分类似，但不明显属于哪一类产业，最接近第二产业，再来才是第三产业
+    - 东川：产业结构是第二产业只是关联没这么强
+    - 呈贡：比起崇明、富民、晋宁，更接近第二产业和第三产业，一样不明显属于哪一类产业，最接近第二产业，再来才是第三产业，靠近原点，所以其产业结构和平均的结构相近   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggbiplot.corresp <- function(obj) { require(ggplot2)
+  require(ggrepel)
+  require(tibble)
+  rscore <- tibble(
+    label = rownames(obj$rscore), x = obj$rscore[,1],
+    y = obj$rscore[,2]
+  )
+  cscore <- tibble(
+    label = rownames(obj$cscore), x = obj$cscore[,1],
+    y = obj$cscore[,2]
+  )
+  p <- ggplot(mapping = aes(x = x, y = y, label=label)) +
+    geom_text_repel(data = rscore, color="black",size=10) + geom_text_repel(data = cscore, color="red",size=10) + geom_hline(yintercept=0, linetype=3, col="gray") + geom_vline(xintercept=0, linetype=3, col="gray") + labs(x=NULL, y=NULL)
+  p }
+
+ggbiplot.corresp(co)
+```
+
+
+-------
+
+# 3. 多元图形辅助分析
+
+## 3.1 星图
+
+因为归一化，所以不如对应分析结果可解释，但还是能看出不同区县内的产业占比
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+stars(df, len=0.9, cex=2.5, key.loc=c(12,2.5),draw.segments=TRUE,
+      labels = paste(row.names(df)))
+```
+
+## 3.2 臉譜圖
+
+脸谱图可以明显看出哪些区县在不同的特征内的数值相近，但是无法来解释区县和产业间的关系
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+aplpack::faces(df,cex = 3.5)
+```
+
+----
+
+
+# 4. 小結
+
+由多元图形辅助分析可以看出，若想单看区县和产业间的结构关系，则使用对应分析是最好辨别和解释的，虽然星图和脸谱图或多或少也能解释不同的面向，然而效果都没对应分析来得好，这也展现出对应分析的优势 
