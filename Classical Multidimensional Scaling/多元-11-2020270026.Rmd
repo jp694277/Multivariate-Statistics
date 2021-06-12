@@ -1,0 +1,155 @@
+---
+title: "多元-11-2020270026"
+author: "2020270026 王姿文"
+date: "5/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(kableExtra)
+library(showtext)
+library(ggplot2)
+library(ggrepel)
+showtext.auto(enable = TRUE)
+options(scipen=999)
+#font.add('SimSun')
+```
+
+# 1. 数据   
+
+- 数据叙述：广东省各地区（21区）农村经济发展指标，其中变量为`农业产值`(x1)、`林业产值`(x2)、`牧业产值`(x3)、`企业人数`(x4)、`企业总产值`(x5)、`利润总额`(x6)
+
+- 目标： 利用古典多维标度法替六个农村经济发展指标做分析评价。由于多维数据如果想做二维或三维图， 需要进行降维，而常见的主成分、因子分析虽可以降维，但是其关注的保留信息不同。本次报告希望保留原来的距离信息或相似度信息，因此采用多维标度分析。
+
+   
+   
+下表为数据，以及数据的结构：  
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+df <- read_excel("ex10.2.xls")
+a <- df$...1
+df <- df[,-1]
+rownames(df) <- a
+colnames(df) <- c('农业产值','林业产值','牧业产值','企业人数','企业总产值','利润总额')
+
+kbl(df) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+
+str(df)
+```
+
+-------
+
+# 2. 古典多维标度分析
+
+首先将21个省份的6个经济指标转换为距离矩阵，以便后续古典多维标度分析   
+   
+   
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+d <- dist(df) 
+D <- round(as.matrix(d), 0)
+kbl(D) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+接着来看多维标度分析结果，这次分析设定降维的维度为两维：
+
+首先能看出第一对典型相关系数很大，高达0.9717098    
+    
+    
+1. points   
+  为矩阵，每行是一个降维坐标，两个维度的座标点相似则代表距离相近，也就是该区间的经济发展相似   
+  
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+res <- cmdscale(d, k = 2, eig=TRUE) 
+p <- as.data.frame(res$points)
+colnames(p) <- c('dim1','dim2')
+kbl(p) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+2. eig   
+  是21个特征值，会发现前几个特征值极高以外，其余特征值都非常低
+  
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+e <- as.data.frame(res$eig)
+row.names(e) <- rownames(df)
+colnames(e) <- c('eigenvalue')
+kbl(e) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+    
+3. GOF   
+  是绝对值累积贡献率和平方累积贡献率，可以看出降到两维的贡献率为0.99，因此数据信息再降维过程中几乎没有遗失
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+g <- as.data.frame(res$GOF)
+row.names(g) <- c('绝对值累积贡献率','平方累积贡献率')
+colnames(g) <- c('GOF')
+kbl(g) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 7)
+```
+
+4. plot    
+   
+  可以此看出广东省21个区的经济发展相似程度，像是几个我们认知里发展较为好的市确实在图内比较特别，例如广州市、深圳市、东莞市...等
+  
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+dp <- as.data.frame(res$points) 
+colnames(dp) <- c("dim1", "dim2") 
+dp[["label"]] <- rownames(df) 
+ggplot(data = dp, mapping = aes(x=dim1, y=dim2, label=label)) + 
+geom_text_repel(size=8) + 
+  labs(title="农村经济状况多维标度分析结果") +
+  theme(plot.title = element_text(size=30, face="bold"),
+        axis.title = element_text(size=30, face="bold"),
+        axis.text = element_text(size=25))
+```
+  接着来逆时针移动此图，使此图和地图上的地理位置类似来比较，可以看出以广州市、东莞市、深圳市三者在地图上的连线来看，地图上的左下半部位置和本图相似，但地图上的右上半部则否，地图上的右上半部则大都集中在本图的正下方，由此可知经济发展相似度或多或少会受地理位置影响，可以大致判别以广州市、东莞市、深圳市三者在地图上的连线来看，其在地图上的左下角和右上角经济发展相似，而本三个市则独树一格 
+  
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+rotate.mat <- function(theta){
+  rbind(c(cos(theta), sin(theta)), c(-sin(theta), cos(theta)))
+}
+deg <- 90
+theta <- pi/180 * deg
+MX <- res$points %*% t(rotate.mat(-theta))
+dp <- as.data.frame(MX) 
+colnames(dp) <- c("dim1", "dim2") 
+dp[["label"]] <- rownames(df) 
+ggplot(data = dp, mapping = aes(x=dim1, y=dim2, label=label)) + 
+geom_text_repel(size=8) + 
+  labs(title="农村经济状况多维标度分析结果") +
+  theme(plot.title = element_text(size=30, face="bold"),
+        axis.title = element_text(size=30, face="bold"),
+        axis.text = element_text(size=25))
+```
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+knitr::include_graphics('map-guangdong.png')
+```
+
+5. 原始 v.s. 降維
+  比较原始经济指标矩阵和降维到2维的近似距离矩阵，数值确实非常接近
+
+原始经济指标矩阵:   
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+as.dist(d)
+```
+
+降维到2维的近似距离矩阵:
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+round(dist(res$points)) #after DR
+```
+
+
+-------
+
+# 3. 結論
+
+
+整体看来廣東省經濟發展指標的古典多維標度分析，可判斷经济发展相似度或多或少会受地理位置影响，可以大致判别以广州市、东莞市、深圳市三者在地图上的连线来看，其在地图上的左下角和右上角经济发展相似，而本三个市则独树一格(且發展較好) 
