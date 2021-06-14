@@ -1,0 +1,382 @@
+---
+title: "Big Data Analysis HW1"
+author: "2020270026 王姿文"
+date: "4/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo=F}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(GISTools)
+library(raster)
+library(ISLR)
+library(GGally)
+library(RSE)
+library(broom)
+library(ggfortify)
+library(MASS)
+library(caret)
+library(kableExtra)
+options(scipen = 999)
+#font.add('SimSun')
+```
+
+# 1 OLS
+
+## 1.1 OLS结果
+
+首先创建data，下表列出前几笔data的数据：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#create data
+set.seed(2020270026)
+n <- 1000
+x1 <- rnorm(n,0,3)
+x2 <- rbinom(n, size=1, prob=0.47)  #0,1
+x3 <- runif(n, 18, 60)
+a <- 2
+b1 <- 2
+b2 <- 0.4
+b3 <- 0.02
+e <- runif(n,-1,1)
+y <- a + b1*x1 + b2*x2 + b3*x3 + e
+dat <- cbind.data.frame(y, x1, x2, x3)
+kbl(head(dat)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+
+```
+
+接着依照下列公式求出$\mathbf{X}$的估计参数$\mathbf{\beta}$和预测值$\hat{\mathbf{y}}$：
+$$\mathbf{\beta} = (\mathbf{X}^{'}\mathbf{X})^{-1}\mathbf{X}^{'}\mathbf{y}$$
+$$\hat{\mathbf{y}} = \mathbf{X}\mathbf{\beta}$$
+$$\mathbf{\epsilon}=\mathbf{y}-\hat{\mathbf{y}}$$
+$$\hat{V(\beta)}=\frac{\mathbf{\epsilon}^{'}\mathbf{\epsilon}}{n-k}(\mathbf{X}^{'}\mathbf{X})^{-1}$$
+得到$\mathbf{\beta}$：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#ols
+x <- data.matrix(dat[2:4])
+y_m <- data.matrix(dat[1])
+xx_inv <- solve(t(x) %*% x)
+
+#beta
+B <- xx_inv %*% t(x) %*% y_m
+kbl(B) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+下表列出前几笔数据，分别为原始数据$y$，预测值$\hat{y}$，和残差$\epsilon$：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+y_pre <- x %*% B
+eps <- y_pre-y_m
+result1_1 <- cbind.data.frame(y, y_pre, eps,x1)
+colnames(result1_1) <- c("y", "y_pre", "residual", 'x1')
+
+kbl(head(result1_1[,1:3])) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+斜方差矩阵为：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ee <- t(eps) %*% eps
+v <- (ee[1]/n-4)*xx_inv
+v
+```
+
+下图为OLS配适结果：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggplot(result1_1, aes(x=x1, y=y)) +
+  geom_point(aes(color='skyblue'),show.legend = T) + 
+  geom_point(aes(x=x1, y=y_pre,color = 'orange'), alpha = 0.3,show.legend = T) + 
+  scale_colour_manual(values = c("orange","skyblue"), labels = c('y','predicted y'),name = ' ')+
+  theme(plot.title = element_text(size=25, face="bold"),
+        axis.title = element_text(size=20, face="bold"),
+        axis.text = element_text(size=18),
+        legend.title=element_blank(),
+        legend.text = element_text(size=18)) +
+  labs(title =paste('Scatter plot of y and predicted y'))
+```
+
+---------
+
+## 1.2 比较不同sample number的OLS结果
+
+首先编写一个boot()函数，分别重复抽样出两个数据集，以比较OLS估计结果。   
+下表为$\mathbf{\beta}$：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+boot <- function(i){sample_n(dat,i,replace=TRUE)}
+dat_50 <- boot(50)
+dat_5000 <- boot(5000)
+
+#dat_50
+x <- data.matrix(dat_50[2:4])
+y_m <- data.matrix(dat_50[1])
+xx_inv <- solve(t(x) %*% x)
+B_50 <- xx_inv %*% t(x) %*% y_m
+
+#dat_5000
+x <- data.matrix(dat_5000[2:4])
+y_m <- data.matrix(dat_5000[1])
+xx_inv <- solve(t(x) %*% x)
+B_5000 <- xx_inv %*% t(x) %*% y_m
+
+#compare
+result1_21 <- cbind.data.frame(B_50,B_5000)
+colnames(result1_21) <- c("n=50", 'n=5000')
+kbl(result1_21) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+接著比較兩者$\mathbf{\beta}$均值會發覺均值不同（因為$\mathbf{\beta}$），不同的原因在于，OLS使用LSE来估计$\mathbf{\beta}$，亦即$min\sum_{i=1}^n(\hat{y_i}-y_i)^2$来求解。已知两者的n不同，故求出的解也会不同，一般来说，sample数越大估计结果越准确。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+result1_22 <- cbind.data.frame(mean(B_50),mean(B_5000))
+colnames(result1_22) <- c("n=50", 'n=5000')
+kbl(result1_22) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+-------
+
+# 2 Plot
+
+- Residual Plot：   
+左上图，采用$n=1000$的原始数据来估计，可以看出残差没有特别趋势，且大多分布在$[-2*sd(\epsilon),2*sd(\epsilon)]$，因此估计结果是好的。
+
+- Histogram of Residual and Error：   
+右上图，采用$n=1000$的原始数据来估计，两个histogram都是设定8个条图，其中紫色为$\epsilon$，黄色为$e$，可以看出误差error集中在$[-1,1]$，且$e \sim U(-1,1)$，而residual$\epsilon$集中在$[-2,2]$，为正态分布，$\epsilon \sim Normal \ Distribution$。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+layout(matrix(c(1,2,3,3), 2, 2, byrow = TRUE))
+par(mar=c(3,3,1,1), mgp=c(2,0.2,0), tcl=-0.2)
+#####2.1######
+x <- data.matrix(dat[2:4])
+y_m <- data.matrix(dat[1])
+xx_inv <- solve(t(x) %*% x)
+B <- xx_inv %*% t(x) %*% y_m
+y_pre <- x %*% B
+eps <- y_pre-y_m
+plot(c(1:1000), eps, main="Residual Plot", 
+     xlab="Index", ylab='Residual', col = 'skyblue',
+     cex.lab=2, cex.axis=1.5, cex.main=2)
+abline(h=0, col="orange",lwd=2,lty=2)
+abline(h=2*sd(eps), col="orange",lwd=2,lty=2)
+abline(h=(-2)*sd(eps), col="orange",lwd=2,lty=2)
+#####2.2######
+t_col <- function(color, percent = 50, name = NULL) {
+  rgb.val <- col2rgb(color)
+  
+  t.col <- rgb(rgb.val[1], rgb.val[2], rgb.val[3],
+               max = 255,
+               alpha = (100 - percent) * 255 / 100,
+               names = name)
+  
+  invisible(t.col)
+}
+
+hist(eps, main='Histogram of Residual and Error'
+     ,col=t_col("mediumpurple3", perc = 50, name = ""), border=F, breaks=8,
+     cex.lab=2, cex.axis=1.5, cex.main=2)
+hist(e, col=t_col("yellow", perc = 50, name = ""), add=T, border=F, breaks=8)
+#####2.3######
+set.seed(2020270026)
+GDP <- rnorm(35, mean=5000, sd=50)
+cols <- heat.colors(35, alpha = 1)[order(GDP)]
+cnMap <- read_sf('https://geo.datav.aliyun.com/areas_v2/bound/100000_full.json') 
+st_crs(cnMap) <- '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs'
+mapObj <- st_geometry(cnMap)
+ext <- extent(cnMap)
+plot(mapObj, xlim=c(ext[1],ext[2]), ylim=c(ext[3], ext[4]), border="gray80", col=cols, lwd=0.5)
+```
+
+-----
+
+# 3 Multiple Regression
+
+首先来看这笔数据ISLR的结构，只有`name`不是continuous variable：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+attach(Auto)
+str(Auto)
+```
+
+去除`name`来看correlation和distribution，发现其中有些variable相关性明显，恐怕有共线性问题：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#corr
+wrap_1<-wrap(ggally_points,size=2,color="mediumpurple2",alpha=0.3)
+wrap_2<-wrap(ggally_densityDiag,size=2,color="skyblue")
+wrap_3 <- wrap(ggally_cor, size = 40, color = "darkgrey", fontface = "bold")
+ggpairs(Auto[,1:8],
+        lower = list(continuous = wrap_1),
+        diag = list(continuous = wrap_2),
+        higher = list(continuous = wrap_3))
+
+cor(Auto[,1:8])
+```
+接着设定`y=mpg`来做回归，由于此题不需要剔除共线性高的变量，因此全部带入回归，并配合所有量变与`mpg`的correlation来解释结果。   
+首先`weight`、`cylinders`、`acceleration`的估参数不显著，比对correlation可以得知不是correlation越高，该变量的估计结果就会越显著。
+虽然有些变量不显著，然而此model的$R^2$高达0.8，且整个model十分显著，整体表现仍然很好，但一定要记得此模型有共线性问题，因此model的结果仍有问题存在。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+lm.fit <- lm(mpg~.,data=Auto[,1:8])
+summary(lm.fit)
+```
+
+correlation：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+cor(Auto[,1:8])[1,]
+```
+
+下表列出前几笔`mpg`与`mpg`预测值的数值，以及残差...等：
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+model.diag.metrics <- augment(lm.fit)
+model.diag.metrics <- as.data.frame(model.diag.metrics)
+model.diag.metrics$.rownames <- as.numeric(model.diag.metrics$.rownames)
+kbl(head(model.diag.metrics[,c(2,10:15)])) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+ggplot(model.diag.metrics, aes(x=.rownames, y=mpg)) +
+  geom_point(aes(color='skyblue'),show.legend = T) + 
+  geom_point(aes(x=.rownames, y=.fitted,color = 'orange'), alpha = 0.3,show.legend = T) + 
+  scale_colour_manual(values = c("orange","skyblue"), labels = c('y','predicted y'),name = ' ')+
+  theme(plot.title = element_text(size=25, face="bold"),
+        axis.title = element_text(size=20, face="bold"),
+        axis.text = element_text(size=18),
+        legend.title=element_blank(),
+        legend.text = element_text(size=18)) +
+  labs(title =paste('Scatter plot of mpg and predicted mpg'))
+```
+
+接着来看diagnostic plots，下为详细解释，总归来说，此model的拟合诊断结果很不错：
+- residual：   
+希望分布呈现正太，且与fitted value间的scatter plot没明显形状（配适越接近水平线越佳），此图可以看出分布呈现正态但超略微右偏，且其与fitted value间的scatter plot没明显形状，只有三笔数据的residual是比较异常的，但整体而言表现极好。
+
+- leverage：   
+   - Leverage point：   
+   这样的点拥有很极端的x值。比如其他样本点的x值都只有几十，而有一个样本点的x值超过了100，这时候这个点将会极大地影响回归模型。就像物理中的力矩一样，这种样本点有很高的leverage，所以叫做leverage points。有的leverage points可以很好地融入模型中，不会对模型造成很大的影响，通常也叫做good leverage points。有时，这种good leverage points证明了模型的普适性；但是它们同时会增大$R^2$ ，使对模型过度自信。所以good leverage points也并不是完全没有弊端。
+   - Influential point：   
+   有good leverage points自然有bad leverage points。既是leverage points又是outliers的点就被称为bad leverage points，也就是influential points。它们的存在极大地影响了模型的可靠性，因为它们会把回归直线向自己的方向“拉扯”。判断influential points的方式可以用图上的Cook‘s distance，若大于1，就认为这个点是异常点。
+   - 此数据：   
+   虽有Leverage point但不是Influential point，所以虽对模型产生影响但不至于到太大，且有才三笔数据罢了。
+   
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#Diagnostic plots
+autoplot(lm.fit) 
+# Cook's distance
+plot(lm.fit, 4,cex.lab=2, cex.axis=1.5, cex.main=2)
+```
+
+------
+
+# 4 Polynomial Regression 
+
+首先读取`Boston`数据，并决定`x = dis`, `y = nox`。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+attach(Boston)
+str(Boston)
+```
+
+接着使用poly()来做回归，设定为3阶，配适结果极佳，不仅估计参数全都显著，model也显著，且$R^2$高达0.7。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+dataB <- Boston[,c(5,8)]
+model <- lm(nox ~ poly(dis,3),data = dataB)
+summary(model)
+```
+
+下图为`nox`和预测值`nox`，以及预测值`nox`的95%C.I：
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+lmpoly <- function(model,k){
+  plot(dataB$dis, dataB$nox, main=paste("Regression and C.I Poly = ", k), 
+       xlab="dis", ylab='nox', col = 'skyblue',
+       cex.lab=2, cex.axis=1.5, cex.main=3.5)
+  myPredict <- predict(model , interval="confidence",level=0.95)
+  ix <- sort(dis,index.return=T)$ix
+  lines(dis[ix], myPredict[ix , 1], col='deepskyblue4', lwd=2 )
+  polygon(c(rev(dis[ix]), dis[ix]), c(rev(myPredict[ ix,3]), myPredict[ ix,2]), col = rgb(0.7,0.7,0.7,0.4) , border = NA)
+  legend('topright',c("Regression Model","95% confidence"), 
+         col=c("deepskyblue4","gray"), lwd=3, cex=2)
+}
+lmpoly(model,3)
+```
+
+接着配饰1~5阶的Polynomial Regression，虽然阶次越高RSS越低，照理说RSS越低模型越好，但要考虑到overfitting的问题，所以不是RSS越低越好。、
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#1~5
+par(mfrow=c(2,3))
+model1 <- lm(nox ~ poly(dis,1),data = dataB)
+model2 <- lm(nox ~ poly(dis,2),data = dataB)
+model3 <- lm(nox ~ poly(dis,3),data = dataB)
+model4 <- lm(nox ~ poly(dis,4),data = dataB)
+model5 <- lm(nox ~ poly(dis,5),data = dataB)
+
+lmpoly <- function(model,k){
+  plot(dataB$dis, dataB$nox, main=paste("Regression and C.I Poly = ", k), 
+       xlab="dis", ylab='nox', col = 'skyblue',
+       cex.lab=2, cex.axis=1.5, cex.main=3.5)
+  myPredict <- predict(model , interval="confidence",level=0.95)
+  ix <- sort(dis,index.return=T)$ix
+  lines(dis[ix], myPredict[ix , 1], col='deepskyblue4', lwd=2 )
+  polygon(c(rev(dis[ix]), dis[ix]), c(rev(myPredict[ ix,3]), myPredict[ ix,2]), col = rgb(0.7,0.7,0.7,0.4) , border = NA)
+  legend('topright',c("Regression Model","95% confidence"), 
+         col=c("deepskyblue4","gray"), lwd=3, cex=2)
+}
+
+lmpoly(model1,1)
+lmpoly(model2,2)
+lmpoly(model3,3)
+lmpoly(model4,4)
+lmpoly(model5,5)
+```
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#RSS
+RSS_d <- cbind.data.frame(deviance(model1),deviance(model2),deviance(model3),
+                          deviance(model4),deviance(model5))
+colnames(RSS_d) <- c("1階", "2階","3階", "4階","5階")
+kbl(RSS_d) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+为了以防overfitting，因此改用LOOCV来判断哪个模型最好，综合比对RMSE和$R^2$后，判定poly=3的model最合适，因为其RMSE最小且$R^2$最大。
+
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+train.control <- trainControl(method = "LOOCV")
+model1 <- train(nox ~ poly(dis,1), data = dataB, method = "lm",
+               trControl = train.control)
+model2 <- train(nox ~ poly(dis,2), data = dataB, method = "lm",
+                trControl = train.control)
+model3 <- train(nox ~ poly(dis,3), data = dataB, method = "lm",
+                trControl = train.control)
+model4 <- train(nox ~ poly(dis,4), data = dataB, method = "lm",
+                trControl = train.control)
+model5 <- train(nox ~ poly(dis,5), data = dataB, method = "lm",
+                trControl = train.control)
+CV_d <- bind_rows(model1$results, model2$results,model3$results, 
+          model4$results,model5$results)[,2:4]
+CV_d$poly <- c(1:5)
+kbl(CV_d) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F, font_size = 12)
+```
+
+最后再用smooth spline分别在df=12, 13, 14做拟合，三个拟合回归线差异不大，不过也较高阶，因此可能有overfitting问题。
+```{r echo=T, warning=FALSE, message=FALSE,fig.width = 18, fig.height=10}
+#sp
+fit1<-smooth.spline(dataB$dis,dataB$nox,df=12) 
+fit2<-smooth.spline(dataB$dis,dataB$nox,df=13) 
+fit3<-smooth.spline(dataB$dis,dataB$nox,df=14) 
+plot(dataB$dis, dataB$nox, main=paste('Smoothing Spline with different df'), 
+     xlab="dis", ylab='nox', col = 'skyblue',
+       cex.lab=2, cex.axis=1.5, cex.main=3.5)
+lines(fit3,col="brown",lwd=2)
+lines(fit2,col="darkgreen",lwd=2)
+lines(fit1,col="deepskyblue4",lwd=2)
+legend("topright",c("df=12",'df=13','df=14'),col=c("deepskyblue4","darkgreen",'brown'),lwd=2, cex=3)
+```
+
+
